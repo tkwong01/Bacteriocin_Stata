@@ -1,22 +1,22 @@
-* 1. Load the merged file
-import delimited "/cluster/tufts/hussainlab/tkwong01/VMRC/MTMG_outs/VIRGO2_results/MTMG_Merged.txt", delimiter(tab) clear 
+* 1. Load the renamed file (The one with v1, v2 labels)
+import delimited "MTMG_Renamed.txt", delimiter(tab) clear 
 
-* 2. Store the first column (the names) so we can use them as headers after transposing
-* We assume your first column is named 'v1' or 'id'
-local id_col = v1[1]
+* 2. Install sxpose if you don't have it (only needs to be done once)
+ssc install sxpose
 
-* 3. Transpose the data
-* 'clear' replaces the data in memory
-* 'varname' creates a new variable called _varname containing the old headers
-xpose, clear varname
+* 3. Transpose while keeping the first column (v1, v2...) as headers
+* 'firstnames' tells Stata to use the current first column as the new variable names
+sxpose, clear firstnames
 
-* 4. Rename variables to add the g_ prefix
-* In Stata, after xpose, columns are named v1, v2, v3, etc.
-* We loop through all variables except the one that holds our new row IDs
+* 4. Now all your columns are named v1, v2, v3... 
+* Let's add the 'g_' prefix to all of them
 foreach var of varlist v* {
-    local oldlabel : var label `var'
     rename `var' g_`var'
 }
 
-* 5. Save the result
-export delimited using "MTMG_Transposed_Stata.txt", delimiter(tab) replace
+* 5. The first column created by sxpose is usually called _varname (the old sample headers)
+* Rename it to something useful
+rename _varname Sample_ID
+
+* 6. Export
+export delimited using "MTMG_Transposed_Final.txt", delimiter(tab) replace
