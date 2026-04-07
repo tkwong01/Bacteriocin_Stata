@@ -6,4 +6,4 @@
 #SBATCH --mem=60G
 
 module load stata/18
-stata-mp -b do your_script.do
+stata-mp -b do 1.Load_Transpose.do
