@@ -1,12 +1,74 @@
-* 1. Load the renamed file (The one with v1, v2 labels)
-import delimited "MTMG_Renamed.txt", delimiter(tab) clear 
+---
+title: "New 15 Strains"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+date: "2025-11-11"
+---
 
-* 2. Install sxpose if you don't have it (only needs to be done once)
-ssc install sxpose
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-* 3. Transpose while keeping the first column (v1, v2...) as headers
-* 'firstnames' tells Stata to use the current first column as the new variable names
-sxpose, clear firstnames
+```{r}
+install.packages("data.table")
+```
+```{r}
+install.packages("limma")
+```
 
-* 6. Export
-export delimited using "/cluster/tufts/hussainlab/tkwong01/VMRC/MTMG_outs/VIRGO2_results/Merged_dir/3.MTMG_Transposed_Renamed.txt", delimiter(tab) replace
+
+```{r}
+# 1. Load data.table for high-speed loading
+library(data.table)
+```
+```{r}
+
+
+# 2. Load the matrix (Fastest way on the cluster)
+print("Reading file...")
+dt <- fread("/cluster/tufts/hussainlab/tkwong01/VMRC/MTMG_outs/VIRGO2_results/Merged_dir/1.MTMG_Merged.txt")
+
+# 3. Create a dummy metadata frame (REPLACE THIS with your actual metadata)
+# Your samples are the columns (excluding the first column which is Gene ID)
+sample_names <- colnames(dt)[-1] 
+metadata <- data.frame(
+    SampleID = sample_names,
+    Group = rep(c("A", "B"), length.out = length(sample_names)) # Example: Treatment/Control
+)
+
+# 4. Prepare for Matrix-wise Regression
+# We use limma because a standard 'lm' loop for 1.1 million rows is too slow.
+# if (!require("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+# BiocManager::install("limma")
+library(limma)
+
+# Convert to a numeric matrix
+gene_ids <- dt[[1]]
+mat <- as.matrix(dt[, -1, with=FALSE])
+rownames(mat) <- gene_ids
+
+# --- 5. Define the Model with a specific gene as a predictor ---
+
+# Identify the row for your "Predictor Gene" (e.g., 'Gene_Y')
+predictor_gene_name <- "Gene_Y" # Replace with your actual Gene ID
+
+# Extract that specific row (it's currently in your 'mat' matrix)
+# We transpose it so it becomes a vertical vector of 1,000 values
+gene_y_abundance <- as.numeric(mat[predictor_gene_name, ])
+
+# Now, instead of 'Group', we use 'gene_y_abundance' in the model
+# This regresses all 1.1 million rows against the values of Gene Y
+design <- model.matrix(~ gene_y_abundance)
+
+# --- 6. Run the Linear Models (Same as before) ---
+print(paste("Running 1.1 million regressions against", predictor_gene_name))
+fit <- lmFit(mat, design)
+fit <- eBayes(fit)
+
+# --- 7. Extract Results ---
+# coef=2 refers to the effect size (slope) of Gene Y's abundance
+results <- topTable(fit, coef=2, number=Inf, sort.by="P")
+```
+
